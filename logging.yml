@@ -1,0 +1,28 @@
+version: 1
+disable_existing_loggers: false
+
+formatters:
+  colored:
+    '()': 'iruka.common.logging.ColoredFormatter'
+    fmt: '{color_apply}[{asctime}] {levelname} {filename}:{lineno}{color_reset} {message}'
+    style: '{'
+  colorless:
+    '()': 'iruka.common.logging.ColorlessFormatter'
+    fmt: '[{asctime}] {levelname} {filename}:{lineno} {message}'
+    style: '{'
+handlers:
+  console:
+    class: 'logging.StreamHandler'
+    level: 'INFO'
+    formatter: 'colored'
+  log_file:
+    class: 'logging.FileHandler'
+    level: 'DEBUG'
+    formatter: 'colorless'
+    filename: 'iruka_server.log'
+
+root:
+  level: 'DEBUG'
+  handlers:
+    - console
+    - log_file

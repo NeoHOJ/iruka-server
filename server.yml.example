@@ -1,0 +1,21 @@
+host: 'localhost'
+port: 50051
+use_https: false
+
+# database credentials
+database:
+  # type: 'mysql'  # NOT USED!
+  # table_prefix: ''
+
+database_config:
+  charset: 'utf8'
+  use_unicode: true
+  host: 'localhost'
+  database: 'SET_DATABASE_HERE'
+  user: 'SET_USER_HERE'
+  password: 'SET_PASSWORD_HERE'
+
+# list of clients; should move to DB
+clients:
+  - name: 'TestJudge'
+    token: 'zxcasd123'

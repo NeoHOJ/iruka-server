@@ -1,0 +1,3 @@
+[submodule "iruka_client"]
+	path = iruka_client
+	url = https://github.com/NeoHOJ/iruka.git
