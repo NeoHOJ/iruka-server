@@ -218,7 +218,13 @@ def serve(config, polling_fn):
     iruka_rpc_pb2_grpc.add_IrukaRpcServicer_to_server(servicer, server)
     conn_path = '{}:{:d}'.format(config.host, config.port)
     if config.use_https:
-        raise NotImplementedError('The use of HTTPS is in dev.')
+        with open(config.ssl_key, 'rb') as f:
+            privkey = f.read()
+        with open(config.ssl_cert, 'rb') as f:
+            fullchain = f.read()
+        creds = ((privkey, fullchain),)
+        server_credentials = grpc.ssl_server_credentials(creds)
+        server.add_secure_port(conn_path, server_credentials)
     else:
         server.add_insecure_port(conn_path)
 
