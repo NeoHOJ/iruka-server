@@ -75,6 +75,7 @@ class Scheduler(object):
 
     def job_accept(self, client, job):
         job.accept(client)
+        job.proto.run_by = client.name
         job.status = common_pb2.JOB_RUNNING
 
     def job_reject(self, client, job, data):

@@ -116,6 +116,8 @@ class Submission(BaseModel):
     submission_time = IntegerField(default=0)
     user = ForeignKeyField(User, column_name='user_id')
 
+    submission_verbose = TextField(null=True)
+
     @property
     def view_debug(self):
         keys = [

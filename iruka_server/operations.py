@@ -1,3 +1,4 @@
+import io
 import logging
 import threading
 from functools import partial
@@ -66,6 +67,10 @@ def _finalize_subm(submission, result):
 # TODO: ensure callback is called for EVERY event
 def _writeback_subm_result(job, submission, pb_event, finalize=False):
     orig_status = submission.submission_status
+    is_resolving = any((pb_event.HasField(x) for x in ['result', 'exception']))
+
+    # NOTE that partial_stat is convert in server.py as a workaround!
+    # when the workaround is removed the logic here should be modified as well.
 
     if pb_event.HasField('ack') and pb_event.ack.reject_reason:
         # somehow, client fails
@@ -91,14 +96,47 @@ def _writeback_subm_result(job, submission, pb_event, finalize=False):
             # actually, N/A
             submission.submission_time = 0
             submission.submission_mem = 0
+            submission.submission_score = 0
             submission.submission_result = arr
 
-        if finalize:
-            _finalize_subm(submission, pb_event.result)
+        _finalize_subm(submission, pb_event.result)
 
         logger.debug('submission now: %s', pformat(submission.view_debug))
 
-    if not job.dry_run:
+    elif pb_event.HasField('exception'):
+        submission.submission_status = common_pb2.SERR
+        # hmm should backtrace be shown to the user?
+
+        # err_buf = io.StringIO()
+        # err_buf.write(pb_event.exception.message + '\n')
+        # err_buf.write(pb_event.exception.backtrace)
+
+        # err_buf.seek(0)
+        # submission.submission_error = ''.join(['> ' + ln for ln in err_buf.readlines()])
+
+        submission.submission_error = '*** Please contact the staff ***';
+        if hasattr(submission, 'submission_verbose'):
+            submission.submission_verbose = '{}\n{}\n'.format(
+                pb_event.exception.message,
+                pb_event.exception.backtrace)
+        else:
+            logger.info(
+                'Submission has no `submission_verbose` field. '
+                'The verbose info. is lost.')
+
+        # FIXME: the values should be computed for partial stats before
+        # the exception
+
+        arr = []
+        for stat in job.content.submission_req.hoj_spec:
+            arr.append([common_pb2.SERR, 0, 0])
+
+        submission.submission_time = 0
+        submission.submission_mem = 0
+        submission.submission_score = 0
+        submission.submission_result = arr
+
+    if is_resolving and not job.dry_run:
         with models.connection_context():
             submission.save()
 
@@ -140,8 +178,11 @@ def submit_job(servicer, submission_id, callback):
 
     prob_type_enum = iruka_rpc_pb2.SubmissionRequest.HojProblemType
     prob_type = prob_type_enum.REGULAR
+    map_extra_files = {}
+
     if prob.problem_special:
         prob_type = prob_type_enum.SPECIAL_JUDGE
+        map_extra_files['checker.cpp'] = prob.problem_check.encode()
     elif prob.problem_id in [23, 118, 119, 120, 121, 122, 257, 290, 363]:
         # TODO
         prob_type = prob_type_enum.INTERACTIVE
@@ -161,7 +202,9 @@ def submit_job(servicer, submission_id, callback):
         submission_id=submission_id,
         submission=iruka_rpc_pb2.Submission(
             problem_id=pid,
-            code=subm.submission_code),
+            code=subm.submission_code,
+            build_preset='cpp',
+            files=map_extra_files),
         hoj_spec=prob_spec,
         hoj_type=prob_type)
 
@@ -180,13 +223,15 @@ _run = partial(submit_job, callback=_writeback_subm_result)
 
 
 def poll_for_submissions(servicer):
+    screwed_ids = set()
+
     while True:
         excluding_submissions = set([
-            job.proto.submission_id for job in
-            servicer.server_job_list.values() if
-            not job.resolved])
+            job.proto.submission_id for job
+            in servicer.server_job_list.values()
+            if not job.resolved]) | screwed_ids
 
-        logger.debug('Excluding unresolved submissions in queue: %r',
+        logger.info('Excluding unresolved submissions in queue: %r',
             excluding_submissions)
 
         with models.connection_context():
@@ -202,9 +247,10 @@ def poll_for_submissions(servicer):
                 logger.info('No active submission, halt')
                 return None
 
-        submission_id = subm_active.submission
+        submission_id = subm_active.submission_id
 
         try:
             submit_job(servicer, submission_id, _writeback_subm_result)
         except Exception:
-            logger.exception('Error submitting job')
+            logger.exception('Error submitting submission of id %d', submission_id)
+            screwed_ids.add(submission_id)

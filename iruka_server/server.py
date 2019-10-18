@@ -118,31 +118,31 @@ class IrukaRpcServicer(iruka_rpc_pb2_grpc.IrukaRpcServicer):
         self.scheduler.job_accept(client, job_obj)
         self.scheduler.job_progress(job_obj, event)
 
+        # FIXME: collect partial_stat and pretend if we have a total result
+        # at once, see below with care
         stat_buffer = []
         has_exceptions = False
 
         for event in request:
-            if event.HasField('result'):
-                if len(event.result.subtasks):
-                    logging.warn('Client reports a non-empty result.subtasks, '
-                        'which is unsupported for now.')
-                break
-
-            if event.HasField('exception'):
-                logger.warn('Exception raised when judging: %s', event.exception.message)
-                has_exceptions = True
-            elif event.HasField('partial_stat'):
+            if event.HasField('partial_stat'):
                 for stctx in event.partial_stat.values:
                     # FIXME: ignore number & label, assume in order
                     stat = stctx.stat
                     stat_buffer.append(stat)
+            elif event.HasField('result'):
+                if len(event.result.subtasks):
+                    logging.warn('Client reports a non-empty result.subtasks, '
+                        'which is unsupported for now.')
+                event.result.subtasks.extend(stat_buffer)
+                break
+            elif event.HasField('exception'):
+                logger.error('Exception raised when judging: %s', event.exception.message)
+                has_exceptions = True
+                break
             else:
                 logger.warn('Unexpected event type encountered: %s; do nothing.', event.WhichOneOf('event'))
 
             self.scheduler.job_progress(job_obj, event)
-
-        # FIXME: if partial stat is sent, concating here is not safe!
-        event.result.subtasks.extend(stat_buffer)
 
         logger.debug('End submission report')
         logger.debug('Stat buffer: %s', pformat([pformat_pb(s, max_level=0) for s in stat_buffer]))
