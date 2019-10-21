@@ -117,9 +117,10 @@ class Submission(BaseModel):
     user = ForeignKeyField(User, column_name='user_id')
 
     submission_verbose = TextField(null=True)
+    submission_preset = TextField(null=True)
 
     @property
-    def view_debug(self):
+    def debug_view(self):
         keys = [
             'submission_id',
             'submission_status',

@@ -101,7 +101,7 @@ def _writeback_subm_result(job, submission, pb_event, finalize=False):
 
         _finalize_subm(submission, pb_event.result)
 
-        logger.debug('submission now: %s', pformat(submission.view_debug))
+        logger.debug('submission now: %s', pformat(submission.debug_view))
 
     elif pb_event.HasField('exception'):
         submission.submission_status = common_pb2.SERR
@@ -170,7 +170,7 @@ def submit_job(servicer, submission_id, callback):
         prob = subm.problem
         pid = prob.problem_id
 
-    logging.debug('submission: %s', pformat(subm.view_debug))
+    logging.debug('submission: %s', pformat(subm.debug_view))
     logging.debug('problem: %d - %s', pid, prob.problem_title)
 
     # transform 2D list to protobuf
@@ -197,13 +197,18 @@ def submit_job(servicer, submission_id, callback):
             subm.submission_id)
         job.dry_run = True
 
+    # backward compatibility
+    preset = subm.submission_preset
+    if preset is None:
+        preset = 'cpp'
+
     submObj = iruka_rpc_pb2.SubmissionRequest(
         id=job.id,
         submission_id=submission_id,
         submission=iruka_rpc_pb2.Submission(
             problem_id=pid,
             code=subm.submission_code,
-            build_preset='cpp',
+            build_preset=subm.submission_preset,
             files=map_extra_files),
         hoj_spec=prob_spec,
         hoj_type=prob_type)
