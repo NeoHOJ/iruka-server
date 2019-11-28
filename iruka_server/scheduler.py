@@ -179,3 +179,4 @@ class Job(object):
 
     def cancel(self):
         self.status = common_pb2.JOB_FAILED
+        self.ack_event.set()
